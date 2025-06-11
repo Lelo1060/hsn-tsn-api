@@ -1,66 +1,55 @@
-from fastapi import FastAPI
-from pydantic import BaseModel
 import openai
 import os
+from fastapi import FastAPI, Request, HTTPException
+from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = FastAPI()
+
+# CORS Einstellungen (damit deine App von überall zugreifen kann)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 class VehicleRequest(BaseModel):
     hsn: str
     tsn: str
-    vin: str = None
-    language: str = "de"
+    vin: str = ""
 
 @app.post("/vehicle-info")
-async def get_vehicle_info(data: VehicleRequest):
-    if data.language == "de":
-        prompt = f"""Gib mir bitte alle verfügbaren technischen und fahrzeugspezifischen Informationen zum Fahrzeug mit:
-- HSN: {data.hsn}
-- TSN: {data.tsn}""" + (f"\n- VIN: {data.vin}" if data.vin else "") + """
+async def get_vehicle_info(data: VehicleRequest, request: Request):
+    if not data.hsn or not data.tsn:
+        raise HTTPException(status_code=400, detail="HSN und TSN sind Pflichtfelder.")
 
-Bitte liefere die Antwort strukturiert und gegliedert mit folgenden Punkten (sofern verfügbar):
+    prompt = f"""
+Fahrzeuginformationen für HSN: {data.hsn}, TSN: {data.tsn}, VIN: {data.vin if data.vin else "nicht angegeben"}
 
-1. Marke, Modell, Baujahr, Typ, Fahrzeugklasse  
-2. Motorcode, Getriebetyp, Leistung, Drehmoment  
-3. Kraftstoffart, Abgasnorm, Katalysator  
-4. Motoröl-Spezifikation, Motorölmenge (mit/ohne Filter)  
-5. Getriebeöl, Kühlmittel, Bremsflüssigkeit, Servoöl  
-6. Zündkerzen, Luftfilter, Innenraumfilter, Kraftstofffilter  
-7. Reifendruck vorne/hinten, Reifengröße, Felgengröße  
-8. Wartungsintervalle (Öl, Bremsflüssigkeit, Zahnriemen etc.)  
-9. Batteriegröße, Lichtmaschine, Klimaanlage  
-10. Sonstige technische Hinweise oder Besonderheiten
+Gib die Daten wie folgt aus:
 
-Antworte auf Deutsch.
-"""
-    else:
-        prompt = f"""Give me all available technical and vehicle-specific information for:
-- HSN: {data.hsn}
-- TSN: {data.tsn}""" + (f"\n- VIN: {data.vin}" if data.vin else "") + """
-
-Please return a structured and organized response with these points (if available):
-
-1. Make, model, year, type, vehicle class  
-2. Engine code, transmission type, power, torque  
-3. Fuel type, emission standard, catalytic converter  
-4. Engine oil specification, engine oil quantity (with/without filter)  
-5. Gearbox oil, coolant, brake fluid, power steering fluid  
-6. Spark plugs, air filter, cabin filter, fuel filter  
-7. Tire pressure front/rear, tire size, rim size  
-8. Maintenance intervals (oil, brake fluid, timing belt etc.)  
-9. Battery size, alternator, air conditioning system  
-10. Other technical notes or special features
-
-Respond in English.
+Fahrzeug: [Marke Modell]
+Motortyp: [z. B. 1.9 TDI]
+Ölmenge: [z. B. 4,5 Liter]
+Ölsorte: [z. B. 5W-30]
+Produktionszeitraum: [z. B. 1999–2003]
 """
 
-    response = openai.ChatCompletion.create(
-        model="gpt-4",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.3,
-        max_tokens=1000
-    )
-
-    return {"data": response.choices[0].message["content"]}
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2,
+            max_tokens=250
+        )
+        answer = response.choices[0].message["content"].strip()
+        return answer
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
