@@ -9,7 +9,7 @@ load_dotenv()
 
 app = FastAPI()
 
-# CORS Einstellungen (damit deine App von überall zugreifen kann)
+# CORS-Einstellungen
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -27,11 +27,13 @@ class VehicleRequest(BaseModel):
 
 @app.post("/vehicle-info")
 async def get_vehicle_info(data: VehicleRequest, request: Request):
+    print("📥 Eingabe empfangen:", data.model_dump())
+
     if not data.hsn or not data.tsn:
+        print("⚠️ Fehlende Eingabe: HSN oder TSN")
         raise HTTPException(status_code=400, detail="HSN und TSN sind Pflichtfelder.")
 
-    prompt = f"""
-Fahrzeuginformationen für HSN: {data.hsn}, TSN: {data.tsn}, VIN: {data.vin if data.vin else "nicht angegeben"}
+    prompt = f"""Fahrzeuginformationen für HSN: {data.hsn}, TSN: {data.tsn}, VIN: {data.vin or "nicht angegeben"}
 
 Gib die Daten wie folgt aus:
 
@@ -39,8 +41,9 @@ Fahrzeug: [Marke Modell]
 Motortyp: [z. B. 1.9 TDI]
 Ölmenge: [z. B. 4,5 Liter]
 Ölsorte: [z. B. 5W-30]
-Produktionszeitraum: [z. B. 1999–2003]
-"""
+Produktionszeitraum: [z. B. 1999–2003]"""
+
+    print("🚀 Sende Anfrage an GPT...")
 
     try:
         response = openai.ChatCompletion.create(
@@ -50,6 +53,8 @@ Produktionszeitraum: [z. B. 1999–2003]
             max_tokens=250
         )
         answer = response.choices[0].message["content"].strip()
+        print("✅ GPT-Antwort erhalten")
         return answer
     except Exception as e:
+        print("❌ GPT-Fehler:", e)
         raise HTTPException(status_code=500, detail=str(e))
