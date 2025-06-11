@@ -33,15 +33,45 @@ async def get_vehicle_info(data: VehicleRequest, request: Request):
         print("⚠️ Fehlende Eingabe: HSN oder TSN")
         raise HTTPException(status_code=400, detail="HSN und TSN sind Pflichtfelder.")
 
-    prompt = f"""Fahrzeuginformationen für HSN: {data.hsn}, TSN: {data.tsn}, VIN: {data.vin or "nicht angegeben"}
+    prompt = f"""Du bist ein Kfz-Meister mit Zugriff auf ein internes Fahrzeuginformationssystem.
 
-Gib die Daten wie folgt aus:
+Ein Kunde hat dir die folgenden Daten gegeben:
 
-Fahrzeug: [Marke Modell]
-Motortyp: [z. B. 1.9 TDI]
-Ölmenge: [z. B. 4,5 Liter]
-Ölsorte: [z. B. 5W-30]
-Produktionszeitraum: [z. B. 1999–2003]"""
+HSN: {data.hsn}
+TSN: {data.tsn}
+Fahrgestellnummer (VIN): {data.vin or "nicht angegeben"}
+
+Basierend auf diesen Informationen gib bitte so viele technische Details wie möglich an, die für eine Werkstatt relevant sind. Konzentriere dich auf folgende Punkte:
+
+• Fahrzeug: Marke, Modell, Baureihe  
+• Baujahr bzw. Produktionszeitraum  
+• Motortyp und Motorcode  
+• Kraftstoffart (Diesel, Benzin, etc.)  
+• Getriebeart (Schaltgetriebe, Automatik etc.)  
+• Leistungsangabe in kW/PS  
+• Hubraum in ccm  
+• Anzahl Zylinder  
+• Antriebsart (z. B. Frontantrieb)  
+• Ölmenge (in Litern)  
+• Ölsorte (z. B. 5W-30 Longlife)  
+• Inspektionsintervalle (km oder Monate)  
+• Zahnriemen-/Steuerkette: Typ & Wechselintervall (falls bekannt)  
+• Besonderheiten oder bekannte Schwachstellen  
+• Beliebte Ersatzteile oder Wartungsaufwand
+
+Format:  
+Fahrzeug: ...  
+Motortyp: ...  
+Kraftstoffart: ...  
+Ölmenge: ...  
+Ölsorte: ...  
+Getriebe: ...  
+...
+
+Wenn du keine 100 % sicheren Infos hast, gib bitte plausible und realistische Standardwerte an. Gib keine falschen oder erfundenen Werte an.
+
+Sprich in sachlicher, technischer Sprache – so, wie ein Werkstattmeister mit einem Kollegen reden würde.
+"""
 
     print("🚀 Sende Anfrage an GPT...")
 
@@ -50,7 +80,7 @@ Produktionszeitraum: [z. B. 1999–2003]"""
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.2,
-            max_tokens=250
+            max_tokens=500
         )
         answer = response.choices[0].message["content"].strip()
         print("✅ GPT-Antwort erhalten")
