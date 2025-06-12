@@ -4,10 +4,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
-import openai
+from openai import OpenAI
+from openai.types.chat import ChatCompletionMessageParam
 
 load_dotenv()
-openai.api_key = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 app = FastAPI()
 
@@ -33,55 +34,59 @@ async def get_vehicle_info(data: VehicleInfoRequest):
     print(f"📥 Eingabe empfangen: HSN={hsn}, TSN={tsn}, VIN={vin}")
 
     try:
-        prompt = (
-            f"Du bist ein Experte für Fahrzeuginformationen. "
-            f"Ich gebe dir eine HSN und TSN (Schlüsselnummern aus einem deutschen Fahrzeugschein). "
-            f"Bitte analysiere diese Kombination:
+        messages: list[ChatCompletionMessageParam] = [
+            {
+                "role": "user",
+                "content": (
+                    f"Du bist ein Experte für Fahrzeuginformationen. "
+                    f"Ich gebe dir eine HSN und TSN (Schlüsselnummern aus einem deutschen Fahrzeugschein). "
+                    f"Bitte analysiere diese Kombination:
 
 "
-            f"HSN: {hsn}
+                    f"HSN: {hsn}
 "
-            f"TSN: {tsn}
+                    f"TSN: {tsn}
 "
-            f"VIN (optional): {vin}
+                    f"VIN (optional): {vin}
 
 "
-            f"Antworte bitte wie im Chat mit allen relevanten Daten:
+                    f"Antworte bitte wie im Chat mit allen relevanten Daten:
 "
-            f"- Marke und Modell
+                    f"- Marke und Modell
 "
-            f"- Baujahr oder Bauzeitraum
+                    f"- Baujahr oder Bauzeitraum
 "
-            f"- Motortyp (z. B. 1.9 TDI)
+                    f"- Motortyp (z. B. 1.9 TDI)
 "
-            f"- Leistung (kW/PS)
+                    f"- Leistung (kW/PS)
 "
-            f"- Kraftstoffart
+                    f"- Kraftstoffart
 "
-            f"- Getriebeart (wenn möglich)
+                    f"- Getriebeart (wenn möglich)
 "
-            f"- Ölsorte (z. B. 5W-30)
+                    f"- Ölsorte (z. B. 5W-30)
 "
-            f"- Ölmenge in Litern
+                    f"- Ölmenge in Litern
 "
-            f"- Besonderheiten oder bekannte Bauform
+                    f"- Besonderheiten oder bekannte Bauform
 
 "
-            f"Falls du dir nicht sicher bist, dann sag:
+                    f"Falls du dir nicht sicher bist, dann sag:
 "
-            f"„Die Schlüsselnummer {hsn}/{tsn} konnte nicht sicher zugeordnet werden. Bitte auf www.hsn-tsn.de prüfen.“
+                    f"„Die Schlüsselnummer {hsn}/{tsn} konnte nicht sicher zugeordnet werden. Bitte auf www.hsn-tsn.de prüfen.“
 "
-            f"Sprich in natürlichem, klarem Deutsch wie in einem Chat."
-        )
+                    f"Sprich in natürlichem, klarem Deutsch wie in einem Chat."
+                )
+            }
+        ]
 
-        response = openai.chat.completions.create(
+        response = client.chat.completions.create(
             model="gpt-4",
-            messages=[
-                {"role": "user", "content": prompt}
-            ],
+            messages=messages,
             temperature=0.3,
             max_tokens=750
         )
+
         result = response.choices[0].message.content.strip()
         return {"response": result}
     except Exception as e:
