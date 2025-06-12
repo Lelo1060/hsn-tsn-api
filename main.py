@@ -80,15 +80,4 @@ async def get_vehicle_info(data: VehicleInfoRequest):
             }
         ]
 
-        response = client.chat.completions.create(
-            model="gpt-4",
-            messages=messages,
-            temperature=0.3,
-            max_tokens=750
-        )
 
-        result = response.choices[0].message.content.strip()
-        return {"response": result}
-    except Exception as e:
-        print(f"❌ GPT-Fehler: {str(e)}")
-        return {"error": "Interner Fehler bei der GPT-Abfrage."}
