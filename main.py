@@ -40,7 +40,7 @@ async def get_vehicle_info(data: VehicleInfoRequest):
                 "content": (
                     f"Du bist ein Experte für Fahrzeuginformationen. "
                     f"Ich gebe dir eine HSN und TSN (Schlüsselnummern aus einem deutschen Fahrzeugschein). "
-                    f"Bitte analysiere diese Kombination:
+                    f"""Bitte analysiere diese Kombination:
 
 "
                     f"HSN: {hsn}
