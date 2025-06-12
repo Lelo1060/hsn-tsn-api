@@ -1,24 +1,25 @@
-import openai
-import os
-from fastapi import FastAPI, Request, HTTPException
+
+from fastapi import FastAPI, Request
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
+import openai
+import os
 from dotenv import load_dotenv
 
 load_dotenv()
 
+openai.api_key = os.getenv("OPENAI_API_KEY")
+
 app = FastAPI()
 
-# CORS-Einstellungen
+# CORS erlauben
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # In Produktion: hier nur deine Domain erlauben!
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-openai.api_key = os.getenv("OPENAI_API_KEY")
 
 class VehicleRequest(BaseModel):
     hsn: str
@@ -26,74 +27,62 @@ class VehicleRequest(BaseModel):
     vin: str = ""
 
 @app.post("/vehicle-info")
-async def get_vehicle_info(data: VehicleRequest, request: Request):
-    print("📥 Eingabe empfangen:", data.model_dump())
+async def get_vehicle_info(data: VehicleRequest):
+    print(f"📥 Eingabe empfangen: {{'hsn': '{data.hsn}', 'tsn': '{data.tsn}', 'vin': '{data.vin}'}}")
+    try:
+        prompt = f""" 
+Du bist ein technischer Assistent mit spezialisiertem Wissen über die deutsche Fahrzeugdatenbank und die Webseite hsn-tsn.de.
 
-    if not data.hsn or not data.tsn:
-        print("⚠️ Fehlende Eingabe: HSN oder TSN")
-        raise HTTPException(status_code=400, detail="HSN und TSN sind Pflichtfelder.")
+Du kennst typische Fahrzeugzuordnungen anhand der Schlüsselnummern:
 
-    prompt = f"""Du bist ein technischer Assistent mit Zugriff auf Fahrzeuginformationen anhand von deutschen Schlüsselnummern.
+- HSN = Herstellerschlüsselnummer (z. B. 0603)
+- TSN = Typschlüsselnummer (z. B. 471)
+- Diese Kombination ergibt ein eindeutiges Fahrzeugmodell.
 
-Beachte:
-- HSN steht für die Hersteller-Schlüsselnummer
-- TSN ist die Typ-Schlüsselnummer
-- Diese Kombination ist eindeutig einem Fahrzeugtyp in Deutschland zugeordnet
-
-Deine Aufgabe ist:
-→ Anhand der HSN/TSN möglichst exakt das Fahrzeug zu benennen und technische Daten bereitzustellen.
-
-Angaben vom Kunden:
+🔍 Eingabe vom Nutzer:
 HSN: {data.hsn}
 TSN: {data.tsn}
-Fahrgestellnummer (VIN): {data.vin or "nicht angegeben"}
+VIN: {data.vin or "nicht angegeben"}
 
-Wenn du diese Schlüsselnummer nicht eindeutig zuordnen kannst, sag das deutlich. Wenn sie plausibel sind, liefere bitte alle verfügbaren Werkstattdaten:
+Deine Aufgabe:
+1. Erkenne das Fahrzeugmodell anhand von HSN & TSN
+2. Gib die wichtigsten technischen Werkstattdaten an
+3. Falls dir die Kombination nicht eindeutig bekannt ist: Sag klar, dass du keine genaue Info liefern kannst, und verweise auf hsn-tsn.de
 
-• Fahrzeug: Marke, Modell, Baureihe  
-• Baujahr bzw. Produktionszeitraum  
-• Motortyp und Motorcode  
-• Kraftstoffart (Diesel, Benzin, etc.)  
-• Getriebeart (Schaltgetriebe, Automatik etc.)  
-• Leistungsangabe in kW/PS  
-• Hubraum in ccm  
-• Anzahl Zylinder  
-• Antriebsart (z. B. Frontantrieb)  
-• Ölmenge (in Litern)  
-• Ölsorte (z. B. 5W-30 Longlife)  
-• Inspektionsintervalle (km oder Monate)  
-• Zahnriemen-/Steuerkette: Typ & Wechselintervall (falls bekannt)  
-• Besonderheiten oder bekannte Schwachstellen  
-• Beliebte Ersatzteile oder Wartungsaufwand
+📦 Format der Antwort:
+Fahrzeug:  
+Produktionszeitraum:  
+Motortyp:  
+Kraftstoffart:  
+Getriebe:  
+Leistung:  
+Hubraum:  
+Zylinder:  
+Antrieb:  
+Ölmenge:  
+Ölsorte:  
+Intervall Ölwechsel:  
+Steuerkette/Zahnriemen:  
+Bekannte Schwächen:  
+Empfohlene Ersatzteile:  
 
-Format:  
-Fahrzeug: ...  
-Motortyp: ...  
-Kraftstoffart: ...  
-Ölmenge: ...  
-Ölsorte: ...  
-Getriebe: ...  
-...
-
-Wichtig:
-- Antworte ausschließlich auf Basis deines Wissens über HSN/TSN
-- Erfinde keine Daten, wenn du dir nicht sicher bist
-- Gib bei Unsicherheit lieber realistische Standardwerte oder "nicht bekannt" an
-- Verwende eine sachliche, technische Sprache wie unter Kfz-Meistern üblich
+⚠️ Wichtige Regeln:
+- Wenn du die Kombination nicht kennst, **nicht raten**
+- Antworte sachlich, wie ein Werkstattmeister
+- Verwende keine Fantasie, nur bekannte Daten aus deiner GPT-Trainingserfahrung
 """
 
-    print("🚀 Sende Anfrage an GPT...")
-
-    try:
+        print("🚀 Sende Anfrage an GPT...")
         response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.2,
-            max_tokens=700
         )
-        answer = response.choices[0].message["content"].strip()
-        print("✅ GPT-Antwort erhalten")
-        return answer
+
+        result = response.choices[0].message["content"]
+        print("✅ GPT-Antwort empfangen.")
+        return {"result": result}
+
     except Exception as e:
-        print("❌ GPT-Fehler:", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"❌ GPT-Fehler: {str(e)}")
+        return {"error": "Fehler beim Abrufen der Fahrzeugdaten."}
