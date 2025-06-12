@@ -50,8 +50,6 @@ Gib alle relevanten Daten für den Werkstattgebrauch aus:
 - Ölsorte (z. B. 5W-30)
 - Fahrgestellnummer (VIN), falls angegeben: {vin}
 
-Wenn du dir **nicht sicher** bist, gib keine falsche Antwort aus.
-Stattdessen sag: „Die Schlüsselnummer {hsn}/{tsn} konnte nicht eindeutig erkannt werden. Bitte auf www.hsn-tsn.de prüfen.“
 Antwort immer auf Deutsch.
 '''
 
