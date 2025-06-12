@@ -1,26 +1,27 @@
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 import openai
 import os
 from dotenv import load_dotenv
 
+# Lade Umgebungsvariablen (API-Schlüssel etc.)
 load_dotenv()
-
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 app = FastAPI()
 
-# CORS erlauben
+# CORS-Konfiguration (für die Android-App)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In Produktion: hier nur deine Domain erlauben!
+    allow_origins=["*"],  # In Produktion begrenzen!
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# Datenmodell für den POST-Body
 class VehicleRequest(BaseModel):
     hsn: str
     tsn: str
@@ -28,28 +29,22 @@ class VehicleRequest(BaseModel):
 
 @app.post("/vehicle-info")
 async def get_vehicle_info(data: VehicleRequest):
-    print(f"📥 Eingabe empfangen: {{'hsn': '{data.hsn}', 'tsn': '{data.tsn}', 'vin': '{data.vin}'}}")
+    print(f"📥 Anfrage erhalten: HSN={data.hsn}, TSN={data.tsn}, VIN={data.vin}")
     try:
-        prompt = f""" 
-Du bist ein technischer Assistent mit spezialisiertem Wissen über die deutsche Fahrzeugdatenbank und die Webseite hsn-tsn.de.
+        # Perfekter Prompt für realistische GPT-Antwort
+        prompt = f"""
+Du bist ein technischer Fahrzeugdaten-Assistent mit speziellem Wissen über die deutsche Fahrzeugdatenbank und die Website hsn-tsn.de.
 
-Du kennst typische Fahrzeugzuordnungen anhand der Schlüsselnummern:
+Deine Aufgabe ist es, ein Fahrzeug anhand der HSN- und TSN-Kombination möglichst genau zu identifizieren. Wenn möglich, liefere bitte auch technische Werkstattinformationen.
 
-- HSN = Herstellerschlüsselnummer (z. B. 0603)
-- TSN = Typschlüsselnummer (z. B. 471)
-- Diese Kombination ergibt ein eindeutiges Fahrzeugmodell.
-
-🔍 Eingabe vom Nutzer:
+🔎 Eingabe:
 HSN: {data.hsn}
 TSN: {data.tsn}
 VIN: {data.vin or "nicht angegeben"}
 
-Deine Aufgabe:
-1. Erkenne das Fahrzeugmodell anhand von HSN & TSN
-2. Gib die wichtigsten technischen Werkstattdaten an
-3. Falls dir die Kombination nicht eindeutig bekannt ist: Sag klar, dass du keine genaue Info liefern kannst, und verweise auf hsn-tsn.de
+Wenn du dir nicht sicher bist, gib dies bitte ehrlich an.
 
-📦 Format der Antwort:
+📋 Format der Antwort:
 Fahrzeug:  
 Produktionszeitraum:  
 Motortyp:  
@@ -66,23 +61,25 @@ Steuerkette/Zahnriemen:
 Bekannte Schwächen:  
 Empfohlene Ersatzteile:  
 
-⚠️ Wichtige Regeln:
-- Wenn du die Kombination nicht kennst, **nicht raten**
-- Antworte sachlich, wie ein Werkstattmeister
-- Verwende keine Fantasie, nur bekannte Daten aus deiner GPT-Trainingserfahrung
+Regeln:
+- Keine Vermutungen. Nur antworten, wenn du dir sicher bist.
+- Wenn die Kombination unbekannt ist, bitte auf hsn-tsn.de verweisen.
+- Sprich wie ein Werkstattmeister, nicht wie ein Chatbot.
 """
 
-        print("🚀 Sende Anfrage an GPT...")
+        print("🚀 GPT-Anfrage wird gesendet...")
+
+        # GPT-Anfrage mit GPT-4 und niedriger Kreativität
         response = openai.ChatCompletion.create(
             model="gpt-4",
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.2,
+            temperature=0.0,
         )
 
-        result = response.choices[0].message["content"]
-        print("✅ GPT-Antwort empfangen.")
-        return {"result": result}
+        antwort = response.choices[0].message["content"]
+        print("✅ GPT-Antwort erhalten")
+        return {"result": antwort}
 
     except Exception as e:
-        print(f"❌ GPT-Fehler: {str(e)}")
-        return {"error": "Fehler beim Abrufen der Fahrzeugdaten."}
+        print(f"❌ Fehler bei der GPT-Abfrage: {e}")
+        return {"error": "Interner Fehler bei der Verarbeitung der Fahrzeugdaten."}
