@@ -1,83 +1,66 @@
-
-import os
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from dotenv import load_dotenv
-from openai import OpenAI
-from openai.types.chat import ChatCompletionMessageParam
-
-load_dotenv()
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+import openai
+import os
 
 app = FastAPI()
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
-class VehicleInfoRequest(BaseModel):
+class VehicleRequest(BaseModel):
     hsn: str
     tsn: str
-    vin: str = ""
+    vin: str = None
+    language: str = "de"
 
 @app.post("/vehicle-info")
-async def get_vehicle_info(data: VehicleInfoRequest):
-    hsn = data.hsn.strip()
-    tsn = data.tsn.strip()
-    vin = data.vin.strip()
+async def get_vehicle_info(data: VehicleRequest):
+    if data.language == "de":
+        prompt = f"""Gib mir bitte alle verfügbaren technischen und fahrzeugspezifischen Informationen zum Fahrzeug mit:
+- HSN: {data.hsn}
+- TSN: {data.tsn}""" + (f"\n- VIN: {data.vin}" if data.vin else "") + """
 
-    print(f"📥 Eingabe empfangen: HSN={hsn}, TSN={tsn}, VIN={vin}")
+Bitte liefere die Antwort strukturiert und gegliedert mit folgenden Punkten (sofern verfügbar):
 
-    try:
-        messages: list[ChatCompletionMessageParam] = [
-            {
-                "role": "user",
-                "content": (
-                    f"Du bist ein Experte für Fahrzeuginformationen. "
-                    f"Ich gebe dir eine HSN und TSN (Schlüsselnummern aus einem deutschen Fahrzeugschein). "
-                    f"""Bitte analysiere diese Kombination:
+1. Marke, Modell, Baujahr, Typ, Fahrzeugklasse  
+2. Motorcode, Getriebetyp, Leistung, Drehmoment  
+3. Kraftstoffart, Abgasnorm, Katalysator  
+4. Motoröl-Spezifikation, Motorölmenge (mit/ohne Filter)  
+5. Getriebeöl, Kühlmittel, Bremsflüssigkeit, Servoöl  
+6. Zündkerzen, Luftfilter, Innenraumfilter, Kraftstofffilter  
+7. Reifendruck vorne/hinten, Reifengröße, Felgengröße  
+8. Wartungsintervalle (Öl, Bremsflüssigkeit, Zahnriemen etc.)  
+9. Batteriegröße, Lichtmaschine, Klimaanlage  
+10. Sonstige technische Hinweise oder Besonderheiten
 
-"
-                    f"HSN: {hsn}
-"
-                    f"TSN: {tsn}
-"
-                    f"VIN (optional): {vin}
+Antworte auf Deutsch.
+"""
+    else:
+        prompt = f"""Give me all available technical and vehicle-specific information for:
+- HSN: {data.hsn}
+- TSN: {data.tsn}""" + (f"\n- VIN: {data.vin}" if data.vin else "") + """
 
-"
-                    f"Antworte bitte wie im Chat mit allen relevanten Daten:
-"
-                    f"- Marke und Modell
-"
-                    f"- Baujahr oder Bauzeitraum
-"
-                    f"- Motortyp (z. B. 1.9 TDI)
-"
-                    f"- Leistung (kW/PS)
-"
-                    f"- Kraftstoffart
-"
-                    f"- Getriebeart (wenn möglich)
-"
-                    f"- Ölsorte (z. B. 5W-30)
-"
-                    f"- Ölmenge in Litern
-"
-                    f"- Besonderheiten oder bekannte Bauform
+Please return a structured and organized response with these points (if available):
 
-"
-                    f"Falls du dir nicht sicher bist, dann sag:
-"
-                    f"„Die Schlüsselnummer {hsn}/{tsn} konnte nicht sicher zugeordnet werden. Bitte auf www.hsn-tsn.de prüfen.“
-"
-                    f"Sprich in natürlichem, klarem Deutsch wie in einem Chat."
-                )
-            }
-        ]
+1. Make, model, year, type, vehicle class  
+2. Engine code, transmission type, power, torque  
+3. Fuel type, emission standard, catalytic converter  
+4. Engine oil specification, engine oil quantity (with/without filter)  
+5. Gearbox oil, coolant, brake fluid, power steering fluid  
+6. Spark plugs, air filter, cabin filter, fuel filter  
+7. Tire pressure front/rear, tire size, rim size  
+8. Maintenance intervals (oil, brake fluid, timing belt etc.)  
+9. Battery size, alternator, air conditioning system  
+10. Other technical notes or special features
 
+Respond in English.
+"""
 
+    response = openai.ChatCompletion.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.3,
+        max_tokens=1000
+    )
+
+    return {"data": response.choices[0].message["content"]}
