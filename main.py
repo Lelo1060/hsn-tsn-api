@@ -1,49 +1,70 @@
-from fastapi import FastAPI, Request
-from pydantic import BaseModel
-from openai import OpenAI
-import os
-from dotenv import load_dotenv
 
-load_dotenv()
+from fastapi import FastAPI
+import requests
+from bs4 import BeautifulSoup
 
 app = FastAPI()
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-class VehicleRequest(BaseModel):
-    hsn: str
-    tsn: str
-    vin: str = ""
+def scrape_from_hsn_tsn(hsn, tsn):
+    url = f"http://www.hsn-tsn.de/{hsn.lower()}-{tsn.lower()}.html"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    response = requests.get(url, headers=headers)
 
-@app.post("/vehicle-info")
-async def get_vehicle_info(data: VehicleRequest):
-    prompt = f"""
-Ich bin ein deutscher Kfz-Meister. Ich möchte ein Fahrzeug anhand folgender HSN/TSN identifizieren:
+    if response.status_code != 200:
+        return {"Fehler": "HSN/TSN-Seite nicht gefunden."}
 
-HSN: {data.hsn}
-TSN: {data.tsn}
+    soup = BeautifulSoup(response.text, "html.parser")
+    result = {}
 
-Gib mir basierend auf diesen Informationen bitte folgende Daten aus:
-- Hersteller, Modell, genaue Motorbezeichnung
-- Bauzeitraum (von/bis)
-- Karosserieform
-- Kraftstoffart
-- Leistung (kW/PS)
-- Hubraum
-- Anzahl Türen & Sitze
-- Getriebeart
-- Besonderheiten oder bekannte Merkmale dieses Fahrzeugs
+    # Titel (z. B. "BMW 1er 118d")
+    title = soup.find("h1")
+    if title:
+        result["Modell"] = title.get_text(strip=True)
 
-Wenn du keine passenden Daten findest, gib an: 'Fahrzeugdaten konnten nicht eindeutig ermittelt werden.'
-"""
+    table = soup.find("table")
+    if table:
+        for row in table.find_all("tr"):
+            cols = row.find_all("td")
+            if len(cols) == 2:
+                key = cols[0].get_text(strip=True)
+                val = cols[1].get_text(strip=True)
+                result[key] = val
 
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "Du bist ein hilfreicher Fahrzeug-Experte."},
-                {"role": "user", "content": prompt}
-            ]
-        )
-        return {"response": response.choices[0].message.content.strip()}
-    except Exception as e:
-        return {"error": str(e)}
+    return result
+
+def scrape_additional_info(modellbezeichnung):
+    query = modellbezeichnung + " technische daten"
+    url = f"https://www.google.com/search?q={query}"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    response = requests.get(url, headers=headers)
+
+    if response.status_code != 200:
+        return {"Zusatzinfos": "Keine weiteren Infos abrufbar."}
+
+    soup = BeautifulSoup(response.text, "html.parser")
+    snippets = soup.find_all("span")
+
+    ergebnisse = []
+    for s in snippets:
+        text = s.get_text(strip=True)
+        if any(w in text.lower() for w in ["kw", "ps", "baujahr", "verbrauch", "hubraum"]):
+            ergebnisse.append(text)
+
+    if not ergebnisse:
+        return {"Zusatzinfos": "Keine Details gefunden."}
+
+    return {"Zusatzinfos": ergebnisse[:5]}  # max. 5 Zusatzinfos
+
+@app.get("/hsn-tsn")
+async def get_vehicle_data(hsn: str, tsn: str):
+    basisdaten = scrape_from_hsn_tsn(hsn, tsn)
+
+    if "Modell" in basisdaten:
+        zusatzdaten = scrape_additional_info(basisdaten["Modell"])
+    else:
+        zusatzdaten = {"Zusatzinfos": "Modellname fehlt, keine Recherche möglich."}
+
+    return {
+        "Basisdaten": basisdaten,
+        **zusatzdaten
+    }
