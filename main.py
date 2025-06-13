@@ -1,13 +1,13 @@
 
 from fastapi import FastAPI
 from pydantic import BaseModel
-import openai
+from openai import OpenAI
 import os
 from dotenv import load_dotenv
 
 load_dotenv()
 
-openai.api_key = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 app = FastAPI()
 
@@ -20,16 +20,16 @@ def ask_gpt(hsn, tsn):
         f"Ich habe die Schlüsselnummer HSN {hsn} und TSN {tsn}. "
         f"Bitte nenne mir das Fahrzeugmodell, Baujahre, Leistung, Hubraum, Kraftstoffart, "
         f"und wenn möglich auch Ölmenge und technische Daten. "
-        f"Formatiere die Antwort als JSON-ähnliche Liste mit klaren Werten."
+        f"Gib die Antwort im JSON-ähnlichen Format."
     )
 
     try:
-        response = openai.ChatCompletion.create(
+        chat = client.chat.completions.create(
             model="gpt-4",
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.4,
+            temperature=0.4
         )
-        return response.choices[0].message.content.strip()
+        return chat.choices[0].message.content.strip()
     except Exception as e:
         return f"Fehler bei GPT-Anfrage: {str(e)}"
 
