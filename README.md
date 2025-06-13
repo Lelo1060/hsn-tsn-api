@@ -1,15 +1,21 @@
 
-# CarDecoder Backend mit Webscraper
+# GPT-gestützte Fahrzeug-API (HSN/TSN → Fahrzeuginfo)
 
-Dieses FastAPI-Backend nutzt zwei Webscraper:
-1. Holt Fahrzeugdaten anhand von HSN/TSN von https://hsn-tsn.de
-2. Recherchiert zusätzliche technische Infos per Google-Suche
+## Beschreibung
+Diese FastAPI nutzt die OpenAI GPT-API, um zu HSN/TSN-Kombinationen Fahrzeugdaten zu ermitteln.
 
 ## Endpunkt
-`GET /hsn-tsn?hsn=0005&tsn=BLH`
+POST /vehicle-info
 
-## Start (lokal)
-```bash
-pip install -r requirements.txt
-uvicorn main:app --reload
-```
+### Beispiel JSON-Body:
+{
+  "hsn": "0583",
+  "tsn": "aaw"
+}
+
+## Antwort
+Ein von GPT generierter Text mit technischen Fahrzeuginformationen.
+
+## .env
+Leg eine Datei `.env` an mit:
+OPENAI_API_KEY=dein_api_key
