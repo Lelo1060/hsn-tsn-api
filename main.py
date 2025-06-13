@@ -16,35 +16,27 @@ def scrape_from_hsn_tsn(hsn, tsn):
     resp = requests.get(url, headers=headers)
     if resp.status_code != 200:
         return {"Fehler": f"Status {resp.status_code}"}
+
     soup = BeautifulSoup(resp.text, "html.parser")
     result = {}
 
-    # Modell
-    h1 = soup.find("h1")
-    if h1:
-        result["Modell"] = h1.text.strip()
+    # Suche nach <li> mit passender HSN/TSN-Kombi
+    for li in soup.find_all("li"):
+        text = li.text.strip()
+        if text.startswith(f"{hsn}/{tsn.upper()}"):
+            parts = [p.strip() for p in text.split(",")]
+            if len(parts) >= 6:
+                result["Modell"] = f"{parts[1]} {parts[2]}"
+                result["Leistung"] = parts[3]
+                result["Hubraum"] = parts[4]
+                result["Kraftstoff"] = parts[5]
+            result["Originalzeile"] = text
+            break
 
-    # Tabelle mit Details
-    tbl = soup.find("table")
-    if tbl:
-        for tr in tbl.find_all("tr"):
-            td = tr.find_all("td")
-            if len(td) == 2:
-                result[td[0].text.strip()] = td[1].text.strip()
-
-    # Falls keine Tabelle, versuche <li>-Elemente
-    if not result.get("Leistung"):
-        for li in soup.find_all("li"):
-            txt = li.text.strip()
-            if "/" in txt and tsn.upper() in txt:
-                parts = txt.split(",")
-                result["Details"] = parts[0].strip() + ": " + " / ".join(parts[1:])
-                break
-
-    return result if result else {"Fehler": "Keine Daten extrahiert"}
+    return result if result else {"Fehler": "Keine passenden Fahrzeugdaten gefunden."}
 
 def scrape_additional_info(modellbezeichnung):
-    query = modellbezeichnung + " technische daten"
+    query = modellbezeichnung + " ölmenge motor technische daten"
     url = f"https://www.google.com/search?q={query}"
     headers = {"User-Agent": "Mozilla/5.0"}
     response = requests.get(url, headers=headers)
@@ -58,7 +50,7 @@ def scrape_additional_info(modellbezeichnung):
     ergebnisse = []
     for s in snippets:
         text = s.get_text(strip=True)
-        if any(w in text.lower() for w in ["kw", "ps", "baujahr", "verbrauch", "hubraum"]):
+        if any(w in text.lower() for w in ["öl", "liter", "füllmenge", "ölmenge", "motoröl", "viskosität"]):
             ergebnisse.append(text)
 
     return {"Zusatzinfos": ergebnisse[:5]} if ergebnisse else {"Zusatzinfos": "Keine Details gefunden."}
