@@ -1,9 +1,14 @@
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from pydantic import BaseModel
 import requests
 from bs4 import BeautifulSoup
 
 app = FastAPI()
+
+class VehicleRequest(BaseModel):
+    hsn: str
+    tsn: str
 
 def scrape_from_hsn_tsn(hsn, tsn):
     url = f"http://www.hsn-tsn.de/{hsn.lower()}-{tsn.lower()}.html"
@@ -55,9 +60,9 @@ def scrape_additional_info(modellbezeichnung):
 
     return {"Zusatzinfos": ergebnisse[:5]}  # max. 5 Zusatzinfos
 
-@app.get("/hsn-tsn")
-async def get_vehicle_data(hsn: str, tsn: str):
-    basisdaten = scrape_from_hsn_tsn(hsn, tsn)
+@app.post("/vehicle-info")
+async def get_vehicle_info(data: VehicleRequest):
+    basisdaten = scrape_from_hsn_tsn(data.hsn, data.tsn)
 
     if "Modell" in basisdaten:
         zusatzdaten = scrape_additional_info(basisdaten["Modell"])
